@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Meu Painel Solar</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -14,7 +14,7 @@
             --card-bg: #FFFFFF;
         }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background-color: var(--bg-color);
             margin: 0;
             padding: 15px;
@@ -27,153 +27,48 @@
             border-radius: 12px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.03);
             margin-bottom: 15px;
-            text-align: center;
+            position: relative;
         }
-        header h1 { margin: 0 0 5px 0; font-size: 20px; color: var(--primary-color); }
-        .device-info { font-size: 11px; color: #7f8c8d; line-height: 1.4; }
-        .grid-cards {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 15px;
-        }
-        .card {
-            background-color: var(--card-bg);
-            padding: 15px;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.03);
-            border-top: 4px solid var(--primary-color);
-        }
+        header h1 { margin: 0 0 5px 0; font-size: 20px; color: var(--primary-color); text-align: center; }
+        .device-info { font-size: 11px; color: #7f8c8d; line-height: 1.4; text-align: center; }
+        .btn-config { position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 20px; cursor: pointer; width: auto; padding: 0; color: #7f8c8d;}
+        
+        .grid-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px; }
+        .card { background-color: var(--card-bg); padding: 15px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.03); border-top: 4px solid var(--primary-color); }
         .card.full-width { grid-column: span 2; }
         .card.geracao { border-top-color: var(--success-color); }
         .card.consumo { border-top-color: var(--danger-color); }
         .card h3 { margin: 0 0 5px 0; font-size: 11px; color: #7f8c8d; text-transform: uppercase; }
         .card .value { font-size: 22px; font-weight: bold; }
         .card .unit { font-size: 11px; color: #95a5a6; }
-        .chart-container, .form-container {
-            background-color: var(--card-bg);
-            padding: 15px;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.03);
-            margin-bottom: 15px;
-        }
+        
+        .chart-container, .form-container { background-color: var(--card-bg); padding: 15px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.03); margin-bottom: 15px; }
         h2 { font-size: 16px; margin-top: 0; color: var(--primary-color); }
         .form-group { margin-bottom: 12px; }
         .form-group label { display: block; margin-bottom: 4px; font-size: 12px; font-weight: bold; }
-        .form-group input {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            box-sizing: border-box;
-            font-size: 14px;
-        }
-        button {
-            width: 100%;
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            padding: 12px;
-            border-radius: 6px;
-            font-weight: bold;
-            font-size: 14px;
-            cursor: pointer;
-        }
+        /* Tamanho de fonte em 16px impede o Android de forçar o zoom */
+        .form-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
+        button { width: 100%; background-color: var(--primary-color); color: white; border: none; padding: 12px; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer; }
+        
+        /* Modal de Configurações */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 20px; border-radius: 12px; width: 90%; max-width: 400px; box-sizing: border-box; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <header>
+        <button class="btn-config" onclick="toggleModal(true)">⚙️</button>
         <h1>EcoMoni - Solar</h1>
         <div class="device-info">
             Inversor: <strong>WEG SIW300H</strong> (S/N: TA24B017813)<br>
-            Status: <span style="color: var(--success-color); font-weight: bold;">● Online</span>
+            Integração API: <span id="api-status" style="color: #2ECC71; font-weight: bold;">● Conectado à Nuvem</span>
         </div>
     </header>
 
     <div class="grid-cards">
         <div class="card geracao full-width">
-            <h3>Geração Instantânea</h3>
-            <div class="value" id="web-power">3.2 kW</div>
-            <div class="unit">Inversor gerando agora</div>
-        </div>
-        <div class="card">
-            <h3>Cód 103 (Injetado)</h3>
-            <div class="value" id="cod-103">7</div>
-            <div class="unit">kWh acumulados</div>
-        </div>
-        <div class="card consumo">
-            <h3>Cód 03 (Consumido)</h3>
-            <div class="value" id="cod-03">10</div>
-            <div class="unit">kWh acumulados</div>
-        </div>
-        <div class="card full-width" id="saldo-card">
-            <h3>Saldo Líquido do Dia</h3>
-            <div class="value" id="saldo-liquido" style="color: var(--danger-color);">-3 kWh</div>
-            <div class="unit">acumulado na rede da concessionária</div>
-        </div>
-    </div>
-
-    <div class="chart-container">
-        <h2>Desempenho Semanal</h2>
-        <canvas id="solarChart"></canvas>
-    </div>
-
-    <div class="form-container">
-        <h2>Lançar Leitura do Relógio</h2>
-        <div class="form-group">
-            <label for="input-103">Código 103 (Injetada):</label>
-            <input type="number" id="input-103" placeholder="Ex: 15" inputmode="numeric">
-        </div>
-        <div class="form-group">
-            <label for="input-03">Código 03 (Consumida):</label>
-            <input type="number" id="input-03" placeholder="Ex: 12" inputmode="numeric">
-        </div>
-        <button onclick="atualizarDados()">Atualizar App</button>
-    </div>
-</div>
-
-<script>
-    const ctx = document.getElementById('solarChart').getContext('2d');
-    const solarChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: ['Seg', 'Ter', 'Qua', 'Qui', 'Hoje'],
-            datasets: [
-                { label: 'Injetado', data: [5, 6, 4, 8, 7], backgroundColor: '#2ECC71', borderRadius: 4 },
-                { label: 'Consumido', data: [8, 9, 11, 7, 10], backgroundColor: '#E74C3C', borderRadius: 4 }
-            ]
-        },
-        options: { responsive: true, scales: { y: { beginAtZero: true } } }
-    });
-
-    function atualizarDados() {
-        const injetado = parseFloat(document.getElementById('input-103').value);
-        const consumido = parseFloat(document.getElementById('input-03').value);
-
-        if (isNaN(injetado) || isNaN(consumido)) {
-            alert("Por favor, preencha os dois campos.");
-            return;
-        }
-
-        document.getElementById('cod-103').innerText = injetado;
-        document.getElementById('cod-03').innerText = consumido;
-
-        const saldo = injetado - consumido;
-        const saldoElement = document.getElementById('saldo-liquido');
-        
-        saldoElement.innerText = (saldo > 0 ? "+" : "") + saldo + " kWh";
-        saldoElement.style.color = saldo >= 0 ? "var(--success-color)" : "var(--danger-color)";
-
-        solarChart.data.datasets[0].data[4] = injetado;
-        solarChart.data.datasets[1].data[4] = consumido;
-        solarChart.update();
-
-        document.getElementById('input-103').value = '';
-        document.getElementById('input-03').value = '';
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-</script>
-</body>
-</html>
+            <h3>Geração Instantânea (FusionSolar)</h3>
+            <div class="value" id="web-power">0.0 kW</div>
+            <div class
