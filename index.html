@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Meu Painel Solar</title>
+    
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <style>
         :root {
             --primary-color: #005A9C;
@@ -46,11 +48,9 @@
         h2 { font-size: 16px; margin-top: 0; color: var(--primary-color); }
         .form-group { margin-bottom: 12px; }
         .form-group label { display: block; margin-bottom: 4px; font-size: 12px; font-weight: bold; }
-        /* Tamanho de fonte em 16px impede o Android de forçar o zoom */
         .form-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
         button { width: 100%; background-color: var(--primary-color); color: white; border: none; padding: 12px; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer; }
         
-        /* Modal de Configurações */
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10; justify-content: center; align-items: center; }
         .modal-content { background: white; padding: 20px; border-radius: 12px; width: 90%; max-width: 400px; box-sizing: border-box; }
     </style>
@@ -71,4 +71,144 @@
         <div class="card geracao full-width">
             <h3>Geração Instantânea (FusionSolar)</h3>
             <div class="value" id="web-power">0.0 kW</div>
-            <div class
+            <div class="unit" id="api-update">Buscando dados em tempo real...</div>
+        </div>
+        <div class="card">
+            <h3>Cód 103 (Injetado)</h3>
+            <div class="value" id="cod-103">0</div>
+            <div class="unit">kWh acumulados</div>
+        </div>
+        <div class="card consumo">
+            <h3>Cód 03 (Consumido)</h3>
+            <div class="value" id="cod-03">0</div>
+            <div class="unit">kWh acumulados</div>
+        </div>
+        <div class="card full-width">
+            <h3>Saldo Líquido do Dia</h3>
+            <div class="value" id="saldo-liquido">0 kWh</div>
+            <div class="unit">acumulado na rede da concessionária</div>
+        </div>
+    </div>
+
+    <div class="chart-container">
+        <h2>Desempenho Semanal</h2>
+        <canvas id="solarChart"></canvas>
+    </div>
+
+    <div class="form-container">
+        <h2>Lançar Leitura do Relógio</h2>
+        <div class="form-group">
+            <label for="input-103">Código 103 (Injetada):</label>
+            <input type="number" id="input-103" placeholder="Ex: 15" inputmode="numeric">
+        </div>
+        <div class="form-group">
+            <label for="input-03">Código 03 (Consumida):</label>
+            <input type="number" id="input-03" placeholder="Ex: 12" inputmode="numeric">
+        </div>
+        <button onclick="salvarLeitura()">Atualizar App</button>
+    </div>
+</div>
+
+<div class="modal" id="configModal">
+    <div class="modal-content">
+        <h2>Configurações do Painel</h2>
+        <p style="font-size: 13px; color: #666;">A integração direta com o robô do Google Apps Script está usando o link ativo.</p>
+        <button onclick="buscarDadosWEG()" style="margin-bottom: 10px; background-color: #2ECC71;">Forçar Atualização</button>
+        <button onclick="toggleModal(false)" style="background-color: #7f8c8d;">Fechar</button>
+    </div>
+</div>
+
+<script>
+    // Inicialização segura do histórico local
+    let historico = JSON.parse(localStorage.getItem('solar_history')) || { 
+        injetado: [0, 0, 0, 0, 0], 
+        consumido: [0, 0, 0, 0, 0], 
+        labels: ['S/D', 'S/D', 'S/D', 'S/D', 'Hoje'] 
+    };
+    
+    // Renderização imediata do gráfico para evitar tela em branco
+    const ctx = document.getElementById('solarChart').getContext('2d');
+    const solarChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: historico.labels,
+            datasets: [
+                { label: 'Injetado', data: historico.injetado, backgroundColor: '#2ECC71', borderRadius: 4 },
+                { label: 'Consumido', data: historico.consumido, backgroundColor: '#E74C3C', borderRadius: 4 }
+            ]
+        },
+        options: { 
+            responsive: true,
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+
+    function renderDados() {
+        const ultInjetado = historico.injetado[historico.injetado.length - 1] || 0;
+        const ultConsumido = historico.consumido[historico.consumido.length - 1] || 0;
+        
+        document.getElementById('cod-103').innerText = ultInjetado;
+        document.getElementById('cod-03').innerText = ultConsumido;
+        
+        const saldo = ultInjetado - ultConsumido;
+        const saldoElem = document.getElementById('saldo-liquido');
+        saldoElem.innerText = (saldo > 0 ? "+" : "") + saldo + " kWh";
+        saldoElem.style.color = saldo >= 0 ? "var(--success-color)" : "var(--danger-color)";
+    }
+
+    function salvarLeitura() {
+        const inj = parseFloat(document.getElementById('input-103').value);
+        const con = parseFloat(document.getElementById('input-03').value);
+        if (isNaN(inj) || isNaN(con)) return alert("Preencha os dois campos corretamente!");
+
+        const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+        const hoje = diasSemana[new Date().getDay()];
+        
+        if(historico.labels[0] === 'S/D' && !localStorage.getItem('solar_history')) {
+            historico.labels = []; historico.injetado = []; historico.consumido = [];
+        }
+
+        historico.labels.push(hoje);
+        historico.injetado.push(inj);
+        historico.consumido.push(con);
+        
+        if(historico.labels.length > 7) {
+            historico.labels.shift(); historico.injetado.shift(); historico.consumido.shift();
+        }
+
+        localStorage.setItem('solar_history', JSON.stringify(historico));
+        solarChart.update();
+        renderDados();
+        
+        document.getElementById('input-103').value = '';
+        document.getElementById('input-03').value = '';
+    }
+
+    function toggleModal(show) { document.getElementById('configModal').style.display = show ? 'flex' : 'none'; }
+
+    // Chamada corrigida com a sua URL da imagem 5111.jpg
+    function buscarDadosWEG() {
+        const urlRoboGoogle = "https://script.google.com/macros/s/AKfycbxoJA8Z_eZUaJ8WL_KxJJMuR4J7CSdY-FblhUZmKL2nlOeLejlgfFkcGNE3c2AYCGr1qw/exec";
+        
+        document.getElementById('api-update').innerText = "Conectando ao inversor...";
+        
+        fetch(urlRoboGoogle)
+            .then(resposta => resposta.json())
+            .then(dados => {
+                if(dados.potencia !== undefined && dados.potencia !== "Erro") {
+                    document.getElementById('web-power').innerText = dados.potencia + " kW";
+                    document.getElementById('api-update').innerText = "Atualizado via FusionSolar";
+                } else {
+                    document.getElementById('api-update').innerText = "Sem resposta do inversor no momento";
+                }
+            })
+            .catch(erro => {
+                document.getElementById('api-update').innerText = "Inversor offline ou processando dados";
+            });
+    }
+
+    // Inicialização de interface isolada
+    renderDados();
+    buscarDadosWEG();
+    setInterval(buscarDadosWEG, 300000);
+</script>
