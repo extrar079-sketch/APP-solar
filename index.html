@@ -119,14 +119,12 @@
 </div>
 
 <script>
-    // Inicialização segura do histórico local
     let historico = JSON.parse(localStorage.getItem('solar_history')) || { 
         injetado: [0, 0, 0, 0, 0], 
         consumido: [0, 0, 0, 0, 0], 
         labels: ['S/D', 'S/D', 'S/D', 'S/D', 'Hoje'] 
     };
     
-    // Renderização imediata do gráfico para evitar tela em branco
     const ctx = document.getElementById('solarChart').getContext('2d');
     const solarChart = new Chart(ctx, {
         type: 'bar',
@@ -186,9 +184,9 @@
 
     function toggleModal(show) { document.getElementById('configModal').style.display = show ? 'flex' : 'none'; }
 
-    // Chamada corrigida com a sua URL da imagem 5111.jpg
     function buscarDadosWEG() {
-        const urlRoboGoogle = "https://script.google.com/macros/s/AKfycbxoJA8Z_eZUaJ8WL_KxJJMuR4J7CSdY-FblhUZmKL2nlOeLejlgfFkcGNE3c2AYCGr1qw/exec";
+        // Link atualizado da sua implantação do Google Apps Script
+        const urlRoboGoogle = "https://script.google.com/macros/s/AKfycbxggVdpoYISRcv9Mef-JnRy1_zp4weOtZW8UYVpcYNhIP2_0DzTt9xi53jVV5vlQGFOiA/exec";
         
         document.getElementById('api-update').innerText = "Conectando ao inversor...";
         
@@ -207,8 +205,9 @@
             });
     }
 
-    // Inicialização de interface isolada
     renderDados();
     buscarDadosWEG();
-    setInterval(buscarDadosWEG, 300000);
+    setInterval(buscarDadosWEG, 300000); // Atualiza a cada 5 minutos
 </script>
+</body>
+</html>
