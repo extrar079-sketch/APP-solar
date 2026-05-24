@@ -47,9 +47,9 @@
 
 <div class="card">
     <h1>EcoMoni</h1>
-    <div id="status-conexao" class="status">Iniciando conexão direta...</div>
+    <div id="status-conexao" class="status">Iniciando conexão...</div>
     <div id="potencia-real" class="valor">0.0 kW</div>
-    <div id="detalhes-planta" class="detalhes">Conectando ao nó europeu...</div>
+    <div id="detalhes-planta" class="detalhes">Conectando via túnel dedicado...</div>
     <button onclick="buscarDadosSolar()">Atualizar Agora</button>
 </div>
 
@@ -59,73 +59,99 @@ async function buscarDadosSolar() {
     const potenciaDiv = document.getElementById("potencia-real");
     const detalhesDiv = document.getElementById("detalhes-planta");
     
-    statusDiv.innerText = "Autenticando na Huawei...";
+    statusDiv.innerText = "Conectando ao servidor...";
     
-    // Proxy público para contornar o bloqueio de segurança CORS do navegador
-    const proxyUrl = "https://api.allorigins.win/get?url=";
+    // Lista de proxies de contingência (Se um falhar, o outro assume)
+    const proxies = [
+        "https://corsproxy.io/?",
+        "https://api.allorigins.win/get?url="
+    ];
+    
     const urlLogin = "https://region01eu5.fusionsolar.huawei.com/thirdData/login";
+    const urlDados = "https://region01eu5.fusionsolar.huawei.com/thirdData/getStationRealKpi";
     
     const credenciais = {
         userName: "CRISTIANO_LENZI",
         systemCode: "solturi123"
     };
 
-    try {
-        // Passo 1: Login via Proxy
-        const loginCompletoUrl = proxyUrl + encodeURIComponent(urlLogin);
-        const respostaLogin = await fetch(loginCompletoUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(credenciais)
-        });
+    // Função interna para tentar fazer o fetch alternando os proxies se necessário
+    async function requisicaoSolar(urlAlvo, corpo, usarWrapper = false) {
+        let erroUltimo = null;
+        
+        for (let proxy de proxies) {
+            try {
+                let urlFinal = proxy + (proxy.includes("allorigins") ? encodeURIComponent(urlAlvo) : urlAlvo);
+                
+                let configs = {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(corpo),
+                    mode: "cors"
+                };
+                
+                // Se for allorigins, ele exige GET encapsulado
+                if (proxy.includes("allorigins")) {
+                    configs.method = "GET";
+                    delete configs.body;
+                    urlFinal = proxy + encodeURIComponent(urlAlvo + "?body=" + JSON.stringify(corpo));
+                }
 
-        const jsonLoginWrapper = await respostaLogin.json();
-        const dadosLogin = JSON.parse(jsonLoginWrapper.contents);
+                const resposta = await fetch(urlFinal, configs);
+                if (!resposta.ok) continue;
+                
+                const texto = await resposta.text();
+                let json = JSON.parse(texto);
+                
+                // Trata o encapsulamento específico do allorigins
+                if (proxy.includes("allorigins") && json.contents) {
+                    json = JSON.parse(json.contents);
+                }
+                
+                return json;
+            } catch (e) {
+                erroUltimo = e;
+            }
+        }
+        throw erroUltimo || new Error("Falha em todos os túneis");
+    }
+
+    try {
+        statusDiv.innerText = "Autenticando...";
+        const dadosLogin = await requisicaoSolar(urlLogin, credenciais);
         
         if (dadosLogin.failCode) {
-            statusDiv.innerText = "Falha no Login (" + dadosLogin.failCode + ")";
-            detalhesDiv.innerText = "Verifique as credenciais da conta Norte.";
+            statusDiv.innerText = "Acesso Negado (" + dadosLogin.failCode + ")";
+            detalhesDiv.innerText = "Verifique o usuário/senha da conta.";
             return;
         }
 
-        statusDiv.innerText = "Obtendo telemetria...";
-
-        // Passo 2: Buscar dados da Planta de geração
-        const urlDados = "https://region01eu5.fusionsolar.huawei.com/thirdData/getStationRealKpi";
-        const dadosCompletoUrl = proxyUrl + encodeURIComponent(urlDados);
-        
-        const respostaDados = await fetch(dadosCompletoUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ stationCodes: "" })
-        });
-
-        const jsonDadosWrapper = await respostaDados.json();
-        const dadosPlanta = JSON.parse(jsonDadosWrapper.contents);
+        statusDiv.innerText = "Atualizando leitura...";
+        const dadosPlanta = await requisicaoSolar(urlDados, { stationCodes: "" });
 
         if (dadosPlanta && dadosPlanta.data && dadosPlanta.data.length > 0 && dadosPlanta.data[0].dataItemMap) {
             const mapa = dadosPlanta.data[0].dataItemMap;
             const activePower = mapa.active_power || 0;
             
             potenciaDiv.innerText = activePower.toFixed(2) + " kW";
-            statusDiv.innerText = "Sistema Online";
-            detalhesDiv.innerText = "Dados atualizados direto da Huawei!";
+            statusDiv.innerText = "Atualizado";
+            detalhesDiv.innerText = "Conexão direta estabelecida.";
         } else {
             potenciaDiv.innerText = "0.00 kW";
-            statusDiv.innerText = "Sem produção ativa";
-            detalhesDiv.innerText = "Conectado. Aguardando atividade solar.";
+            statusDiv.innerText = "Sem produção";
+            detalhesDiv.innerText = "Aguardando geração do inversor.";
         }
 
     } catch (erro) {
         console.error(erro);
-        statusDiv.innerText = "Conexão Instável";
-        detalhesDiv.innerText = "Use os dados móveis (4G/5G) se a sua operadora local restringir o tráfego.";
+        statusDiv.innerText = "Servidor Ocupado";
+        detalhesDiv.innerText = "Toque em atualizar novamente em alguns segundos.";
     }
 }
 
-// Executa automaticamente quando o site carrega no celular
 window.onload = buscarDadosSolar;
 </script>
 
-</body>
+</bod
+    y>
 </html>
