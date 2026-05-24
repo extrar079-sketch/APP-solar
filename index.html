@@ -27,16 +27,18 @@
         }
         h1 { margin-bottom: 10px; color: #4CAF50; }
         .valor { font-size: 3rem; font-weight: bold; margin: 20px 0; color: #ffeb3b; }
-        .status { font-size: 0.9rem; color: #aaa; }
+        .status { font-size: 0.9rem; color: #aaa; min-height: 20px; }
+        .detalhes { font-size: 0.85rem; color: #888; margin-top: 10px; }
         button {
             background-color: #4CAF50;
             color: white;
             border: none;
-            padding: 10px 20px;
+            padding: 12px 24px;
             font-size: 1rem;
             border-radius: 5px;
             cursor: pointer;
             margin-top: 15px;
+            font-weight: bold;
         }
         button:hover { background-color: #45a049; }
     </style>
@@ -45,9 +47,9 @@
 
 <div class="card">
     <h1>EcoMoni</h1>
-    <div id="status-conexao" class="status">Conectando diretamente à Huawei...</div>
+    <div id="status-conexao" class="status">Iniciando conexão direta...</div>
     <div id="potencia-real" class="valor">0.0 kW</div>
-    <div id="detalhes-planta" style="font-size: 0.85rem; color: #888;">Aguardando dados...</div>
+    <div id="detalhes-planta" class="detalhes">Conectando ao nó europeu...</div>
     <button onclick="buscarDadosSolar()">Atualizar Agora</button>
 </div>
 
@@ -57,66 +59,71 @@ async function buscarDadosSolar() {
     const potenciaDiv = document.getElementById("potencia-real");
     const detalhesDiv = document.getElementById("detalhes-planta");
     
-    statusDiv.innerText = "Efetuando login seguro...";
+    statusDiv.innerText = "Autenticando na Huawei...";
     
+    // Proxy público para contornar o bloqueio de segurança CORS do navegador
+    const proxyUrl = "https://api.allorigins.win/get?url=";
     const urlLogin = "https://region01eu5.fusionsolar.huawei.com/thirdData/login";
+    
     const credenciais = {
         userName: "CRISTIANO_LENZI",
         systemCode: "solturi123"
     };
 
     try {
-        // Realiza o login direto do navegador do celular
-        const respostaLogin = await fetch(urlLogin, {
+        // Passo 1: Login via Proxy
+        const loginCompletoUrl = proxyUrl + encodeURIComponent(urlLogin);
+        const respostaLogin = await fetch(loginCompletoUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(credenciais)
         });
 
-        if (!respostaLogin.ok) {
-            throw new Error("Servidor Huawei retornou status " + respostaLogin.status);
-        }
-
-        const dadosLogin = await JSON.parse(await respostaLogin.text());
+        const jsonLoginWrapper = await respostaLogin.json();
+        const dadosLogin = JSON.parse(jsonLoginWrapper.contents);
         
         if (dadosLogin.failCode) {
-            statusDiv.innerText = "Erro nas credenciais da Huawei.";
+            statusDiv.innerText = "Falha no Login (" + dadosLogin.failCode + ")";
+            detalhesDiv.innerText = "Verifique as credenciais da conta Norte.";
             return;
         }
 
-        statusDiv.innerText = "Buscando dados em tempo real...";
+        statusDiv.innerText = "Obtendo telemetria...";
 
-        // Rota pública de Estação/Planta integrada para puxar a geração ativa
+        // Passo 2: Buscar dados da Planta de geração
         const urlDados = "https://region01eu5.fusionsolar.huawei.com/thirdData/getStationRealKpi";
-        const respostaDados = await fetch(urlDados, {
+        const dadosCompletoUrl = proxyUrl + encodeURIComponent(urlDados);
+        
+        const respostaDados = await fetch(dadosCompletoUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ stationCodes: "" })
         });
 
-        const dadosPlanta = await JSON.parse(await respostaDados.text());
+        const jsonDadosWrapper = await respostaDados.json();
+        const dadosPlanta = JSON.parse(jsonDadosWrapper.contents);
 
         if (dadosPlanta && dadosPlanta.data && dadosPlanta.data.length > 0 && dadosPlanta.data[0].dataItemMap) {
             const mapa = dadosPlanta.data[0].dataItemMap;
             const activePower = mapa.active_power || 0;
             
-            potenciaDiv.innerText = activePower + " kW";
-            statusDiv.innerText = "Online";
-            detalhesDiv.innerText = "Planta conectada diretamente sem intermediários.";
+            potenciaDiv.innerText = activePower.toFixed(2) + " kW";
+            statusDiv.innerText = "Sistema Online";
+            detalhesDiv.innerText = "Dados atualizados direto da Huawei!";
         } else {
-            potenciaDiv.innerText = "0.0 kW";
-            statusDiv.innerText = "Sem geração";
-            detalhesDiv.innerText = "Inversor conectado, mas sem produção ativa no momento.";
+            potenciaDiv.innerText = "0.00 kW";
+            statusDiv.innerText = "Sem produção ativa";
+            detalhesDiv.innerText = "Conectado. Aguardando atividade solar.";
         }
 
     } catch (erro) {
         console.error(erro);
-        statusDiv.innerText = "Erro de conexão local.";
-        detalhesDiv.innerText = "Caso persista, certifique-se de testar usando os Dados Móveis (4G/5G).";
+        statusDiv.innerText = "Conexão Instável";
+        detalhesDiv.innerText = "Use os dados móveis (4G/5G) se a sua operadora local restringir o tráfego.";
     }
 }
 
-// Executa a busca assim que o aplicativo abre
+// Executa automaticamente quando o site carrega no celular
 window.onload = buscarDadosSolar;
 </script>
 
