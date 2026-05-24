@@ -47,9 +47,9 @@
 
 <div class="card">
     <h1>EcoMoni</h1>
-    <div id="status-conexao" class="status">Iniciando conexão...</div>
+    <div id="status-conexao" class="status">Aguardando comando...</div>
     <div id="potencia-real" class="valor">0.0 kW</div>
-    <div id="detalhes-planta" class="detalhes">Conectando via túnel dedicado...</div>
+    <div id="detalhes-planta" class="detalhes">Pronto para conectar.</div>
     <button onclick="buscarDadosSolar()">Atualizar Agora</button>
 </div>
 
@@ -59,14 +59,10 @@ async function buscarDadosSolar() {
     const potenciaDiv = document.getElementById("potencia-real");
     const detalhesDiv = document.getElementById("detalhes-planta");
     
-    statusDiv.innerText = "Conectando ao servidor...";
+    statusDiv.innerText = "Conectando ao nó...";
     
-    // Lista de proxies de contingência (Se um falhar, o outro assume)
-    const proxies = [
-        "https://corsproxy.io/?",
-        "https://api.allorigins.win/get?url="
-    ];
-    
+    // ThingProxy: Permite tráfego POST/JSON completo sem travar a requisição
+    const proxyUrl = "https://thingproxy.freeboard.io/fetch/";
     const urlLogin = "https://region01eu5.fusionsolar.huawei.com/thirdData/login";
     const urlDados = "https://region01eu5.fusionsolar.huawei.com/thirdData/getStationRealKpi";
     
@@ -75,80 +71,64 @@ async function buscarDadosSolar() {
         systemCode: "solturi123"
     };
 
-    // Função interna para tentar fazer o fetch alternando os proxies se necessário
-    async function requisicaoSolar(urlAlvo, corpo, usarWrapper = false) {
-        let erroUltimo = null;
-        
-        for (let proxy de proxies) {
-            try {
-                let urlFinal = proxy + (proxy.includes("allorigins") ? encodeURIComponent(urlAlvo) : urlAlvo);
-                
-                let configs = {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(corpo),
-                    mode: "cors"
-                };
-                
-                // Se for allorigins, ele exige GET encapsulado
-                if (proxy.includes("allorigins")) {
-                    configs.method = "GET";
-                    delete configs.body;
-                    urlFinal = proxy + encodeURIComponent(urlAlvo + "?body=" + JSON.stringify(corpo));
-                }
-
-                const resposta = await fetch(urlFinal, configs);
-                if (!resposta.ok) continue;
-                
-                const texto = await resposta.text();
-                let json = JSON.parse(texto);
-                
-                // Trata o encapsulamento específico do allorigins
-                if (proxy.includes("allorigins") && json.contents) {
-                    json = JSON.parse(json.contents);
-                }
-                
-                return json;
-            } catch (e) {
-                erroUltimo = e;
-            }
-        }
-        throw erroUltimo || new Error("Falha em todos os túneis");
-    }
-
     try {
-        statusDiv.innerText = "Autenticando...";
-        const dadosLogin = await requisicaoSolar(urlLogin, credenciais);
+        // 1. Efetuar Login de forma limpa através do ThingProxy
+        statusDiv.innerText = "Autenticando credenciais...";
+        
+        const respostaLogin = await fetch(proxyUrl + urlLogin, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(credenciais)
+        });
+
+        if (!respostaLogin.ok) {
+            throw new Error("Erro no servidor Proxy/Huawei: " + respostaLogin.status);
+        }
+
+        const dadosLogin = await respostaLogin.json();
         
         if (dadosLogin.failCode) {
-            statusDiv.innerText = "Acesso Negado (" + dadosLogin.failCode + ")";
-            detalhesDiv.innerText = "Verifique o usuário/senha da conta.";
+            statusDiv.innerText = "Erro no login: " + dadosLogin.failCode;
+            detalhesDiv.innerText = "Verifique os dados da sua conta.";
             return;
         }
 
-        statusDiv.innerText = "Atualizando leitura...";
-        const dadosPlanta = await requisicaoSolar(urlDados, { stationCodes: "" });
+        // 2. Coletar os dados em tempo real da planta solar
+        statusDiv.innerText = "Baixando telemetria...";
+        
+        const respostaDados = await fetch(proxyUrl + urlDados, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ stationCodes: "" })
+        });
+
+        const dadosPlanta = await respostaDados.json();
 
         if (dadosPlanta && dadosPlanta.data && dadosPlanta.data.length > 0 && dadosPlanta.data[0].dataItemMap) {
             const mapa = dadosPlanta.data[0].dataItemMap;
             const activePower = mapa.active_power || 0;
             
             potenciaDiv.innerText = activePower.toFixed(2) + " kW";
-            statusDiv.innerText = "Atualizado";
-            detalhesDiv.innerText = "Conexão direta estabelecida.";
+            statusDiv.innerText = "Conectado";
+            detalhesDiv.innerText = "Leitura em tempo real atualizada!";
         } else {
             potenciaDiv.innerText = "0.00 kW";
             statusDiv.innerText = "Sem produção";
-            detalhesDiv.innerText = "Aguardando geração do inversor.";
+            detalhesDiv.innerText = "Inversor online, aguardando atividade solar.";
         }
 
     } catch (erro) {
         console.error(erro);
-        statusDiv.innerText = "Servidor Ocupado";
-        detalhesDiv.innerText = "Toque em atualizar novamente em alguns segundos.";
+        statusDiv.innerText = "Falha na comunicação";
+        detalhesDiv.innerText = "O servidor está temporariamente ocupado. Tente novamente.";
     }
 }
 
+// Executa automaticamente ao carregar a página no telemóvel
 window.onload = buscarDadosSolar;
 </script>
 
