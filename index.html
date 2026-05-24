@@ -1,213 +1,124 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Meu Painel Solar</title>
-    
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EcoMoni - Monitoramento Solar</title>
     <style>
-        :root {
-            --primary-color: #005A9C;
-            --success-color: #2ECC71;
-            --danger-color: #E74C3C;
-            --bg-color: #F4F6F9;
-            --card-bg: #FFFFFF;
-        }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background-color: var(--bg-color);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
             margin: 0;
-            padding: 15px;
-            color: #333;
         }
-        .container { max-width: 100%; margin: 0 auto; }
-        header {
-            background-color: var(--card-bg);
-            padding: 15px;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.03);
-            margin-bottom: 15px;
-            position: relative;
+        .card {
+            background-color: #1e1e1e;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            text-align: center;
+            width: 80%;
+            max-width: 400px;
         }
-        header h1 { margin: 0 0 5px 0; font-size: 20px; color: var(--primary-color); text-align: center; }
-        .device-info { font-size: 11px; color: #7f8c8d; line-height: 1.4; text-align: center; }
-        .btn-config { position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 20px; cursor: pointer; width: auto; padding: 0; color: #7f8c8d;}
-        
-        .grid-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px; }
-        .card { background-color: var(--card-bg); padding: 15px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.03); border-top: 4px solid var(--primary-color); }
-        .card.full-width { grid-column: span 2; }
-        .card.geracao { border-top-color: var(--success-color); }
-        .card.consumo { border-top-color: var(--danger-color); }
-        .card h3 { margin: 0 0 5px 0; font-size: 11px; color: #7f8c8d; text-transform: uppercase; }
-        .card .value { font-size: 22px; font-weight: bold; }
-        .card .unit { font-size: 11px; color: #95a5a6; }
-        
-        .chart-container, .form-container { background-color: var(--card-bg); padding: 15px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.03); margin-bottom: 15px; }
-        h2 { font-size: 16px; margin-top: 0; color: var(--primary-color); }
-        .form-group { margin-bottom: 12px; }
-        .form-group label { display: block; margin-bottom: 4px; font-size: 12px; font-weight: bold; }
-        .form-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
-        button { width: 100%; background-color: var(--primary-color); color: white; border: none; padding: 12px; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer; }
-        
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10; justify-content: center; align-items: center; }
-        .modal-content { background: white; padding: 20px; border-radius: 12px; width: 90%; max-width: 400px; box-sizing: border-box; }
+        h1 { margin-bottom: 10px; color: #4CAF50; }
+        .valor { font-size: 3rem; font-weight: bold; margin: 20px 0; color: #ffeb3b; }
+        .status { font-size: 0.9rem; color: #aaa; }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+        button:hover { background-color: #45a049; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <header>
-        <button class="btn-config" onclick="toggleModal(true)">⚙️</button>
-        <h1>EcoMoni - Solar</h1>
-        <div class="device-info">
-            Inversor: <strong>WEG SIW300H</strong> (S/N: TA24B017813)<br>
-            Integração API: <span id="api-status" style="color: #2ECC71; font-weight: bold;">● Conectado à Nuvem</span>
-        </div>
-    </header>
-
-    <div class="grid-cards">
-        <div class="card geracao full-width">
-            <h3>Geração Instantânea (FusionSolar)</h3>
-            <div class="value" id="web-power">0.0 kW</div>
-            <div class="unit" id="api-update">Buscando dados em tempo real...</div>
-        </div>
-        <div class="card">
-            <h3>Cód 103 (Injetado)</h3>
-            <div class="value" id="cod-103">0</div>
-            <div class="unit">kWh acumulados</div>
-        </div>
-        <div class="card consumo">
-            <h3>Cód 03 (Consumido)</h3>
-            <div class="value" id="cod-03">0</div>
-            <div class="unit">kWh acumulados</div>
-        </div>
-        <div class="card full-width">
-            <h3>Saldo Líquido do Dia</h3>
-            <div class="value" id="saldo-liquido">0 kWh</div>
-            <div class="unit">acumulado na rede da concessionária</div>
-        </div>
-    </div>
-
-    <div class="chart-container">
-        <h2>Desempenho Semanal</h2>
-        <canvas id="solarChart"></canvas>
-    </div>
-
-    <div class="form-container">
-        <h2>Lançar Leitura do Relógio</h2>
-        <div class="form-group">
-            <label for="input-103">Código 103 (Injetada):</label>
-            <input type="number" id="input-103" placeholder="Ex: 15" inputmode="numeric">
-        </div>
-        <div class="form-group">
-            <label for="input-03">Código 03 (Consumida):</label>
-            <input type="number" id="input-03" placeholder="Ex: 12" inputmode="numeric">
-        </div>
-        <button onclick="salvarLeitura()">Atualizar App</button>
-    </div>
-</div>
-
-<div class="modal" id="configModal">
-    <div class="modal-content">
-        <h2>Configurações do Painel</h2>
-        <p style="font-size: 13px; color: #666;">A integração direta com o robô do Google Apps Script está usando o link ativo.</p>
-        <button onclick="buscarDadosWEG()" style="margin-bottom: 10px; background-color: #2ECC71;">Forçar Atualização</button>
-        <button onclick="toggleModal(false)" style="background-color: #7f8c8d;">Fechar</button>
-    </div>
+<div class="card">
+    <h1>EcoMoni</h1>
+    <div id="status-conexao" class="status">Conectando diretamente à Huawei...</div>
+    <div id="potencia-real" class="valor">0.0 kW</div>
+    <div id="detalhes-planta" style="font-size: 0.85rem; color: #888;">Aguardando dados...</div>
+    <button onclick="buscarDadosSolar()">Atualizar Agora</button>
 </div>
 
 <script>
-    let historico = JSON.parse(localStorage.getItem('solar_history')) || { 
-        injetado: [0, 0, 0, 0, 0], 
-        consumido: [0, 0, 0, 0, 0], 
-        labels: ['S/D', 'S/D', 'S/D', 'S/D', 'Hoje'] 
-    };
+async function buscarDadosSolar() {
+    const statusDiv = document.getElementById("status-conexao");
+    const potenciaDiv = document.getElementById("potencia-real");
+    const detalhesDiv = document.getElementById("detalhes-planta");
     
-    const ctx = document.getElementById('solarChart').getContext('2d');
-    const solarChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: historico.labels,
-            datasets: [
-                { label: 'Injetado', data: historico.injetado, backgroundColor: '#2ECC71', borderRadius: 4 },
-                { label: 'Consumido', data: historico.consumido, backgroundColor: '#E74C3C', borderRadius: 4 }
-            ]
-        },
-        options: { 
-            responsive: true,
-            scales: { y: { beginAtZero: true } }
-        }
-    });
+    statusDiv.innerText = "Efetuando login seguro...";
+    
+    const urlLogin = "https://region01eu5.fusionsolar.huawei.com/thirdData/login";
+    const credenciais = {
+        userName: "CRISTIANO_LENZI",
+        systemCode: "solturi123"
+    };
 
-    function renderDados() {
-        const ultInjetado = historico.injetado[historico.injetado.length - 1] || 0;
-        const ultConsumido = historico.consumido[historico.consumido.length - 1] || 0;
-        
-        document.getElementById('cod-103').innerText = ultInjetado;
-        document.getElementById('cod-03').innerText = ultConsumido;
-        
-        const saldo = ultInjetado - ultConsumido;
-        const saldoElem = document.getElementById('saldo-liquido');
-        saldoElem.innerText = (saldo > 0 ? "+" : "") + saldo + " kWh";
-        saldoElem.style.color = saldo >= 0 ? "var(--success-color)" : "var(--danger-color)";
-    }
+    try {
+        // Realiza o login direto do navegador do celular
+        const respostaLogin = await fetch(urlLogin, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(credenciais)
+        });
 
-    function salvarLeitura() {
-        const inj = parseFloat(document.getElementById('input-103').value);
-        const con = parseFloat(document.getElementById('input-03').value);
-        if (isNaN(inj) || isNaN(con)) return alert("Preencha os dois campos corretamente!");
-
-        const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-        const hoje = diasSemana[new Date().getDay()];
-        
-        if(historico.labels[0] === 'S/D' && !localStorage.getItem('solar_history')) {
-            historico.labels = []; historico.injetado = []; historico.consumido = [];
+        if (!respostaLogin.ok) {
+            throw new Error("Servidor Huawei retornou status " + respostaLogin.status);
         }
 
-        historico.labels.push(hoje);
-        historico.injetado.push(inj);
-        historico.consumido.push(con);
+        const dadosLogin = await JSON.parse(await respostaLogin.text());
         
-        if(historico.labels.length > 7) {
-            historico.labels.shift(); historico.injetado.shift(); historico.consumido.shift();
+        if (dadosLogin.failCode) {
+            statusDiv.innerText = "Erro nas credenciais da Huawei.";
+            return;
         }
 
-        localStorage.setItem('solar_history', JSON.stringify(historico));
-        solarChart.update();
-        renderDados();
-        
-        document.getElementById('input-103').value = '';
-        document.getElementById('input-03').value = '';
+        statusDiv.innerText = "Buscando dados em tempo real...";
+
+        // Rota pública de Estação/Planta integrada para puxar a geração ativa
+        const urlDados = "https://region01eu5.fusionsolar.huawei.com/thirdData/getStationRealKpi";
+        const respostaDados = await fetch(urlDados, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ stationCodes: "" })
+        });
+
+        const dadosPlanta = await JSON.parse(await respostaDados.text());
+
+        if (dadosPlanta && dadosPlanta.data && dadosPlanta.data.length > 0 && dadosPlanta.data[0].dataItemMap) {
+            const mapa = dadosPlanta.data[0].dataItemMap;
+            const activePower = mapa.active_power || 0;
+            
+            potenciaDiv.innerText = activePower + " kW";
+            statusDiv.innerText = "Online";
+            detalhesDiv.innerText = "Planta conectada diretamente sem intermediários.";
+        } else {
+            potenciaDiv.innerText = "0.0 kW";
+            statusDiv.innerText = "Sem geração";
+            detalhesDiv.innerText = "Inversor conectado, mas sem produção ativa no momento.";
+        }
+
+    } catch (erro) {
+        console.error(erro);
+        statusDiv.innerText = "Erro de conexão local.";
+        detalhesDiv.innerText = "Caso persista, certifique-se de testar usando os Dados Móveis (4G/5G).";
     }
+}
 
-    function toggleModal(show) { document.getElementById('configModal').style.display = show ? 'flex' : 'none'; }
-
-    function buscarDadosWEG() {
-        // Link fornecido atualizado corretamente
-        const urlRoboGoogle = "https://script.google.com/macros/s/AKfycbxggVdpoYISRcv9Mef-JnRy1_zp4weOtZW8UYVpcYNhIP2_0DzTt9xi53jVV5vlQGFOiA/exec";
-        
-        document.getElementById('api-update').innerText = "Conectando ao inversor...";
-        
-        fetch(urlRoboGoogle)
-            .then(resposta => resposta.json())
-            .then(dados => {
-                if(dados.potencia !== undefined && dados.potencia !== "Erro") {
-                    document.getElementById('web-power').innerText = dados.potencia + " kW";
-                    document.getElementById('api-update').innerText = "Atualizado via FusionSolar";
-                } else {
-                    document.getElementById('api-update').innerText = "Sem resposta do inversor no momento";
-                }
-            })
-            .catch(erro => {
-                document.getElementById('api-update').innerText = "Inversor offline ou processando dados";
-            });
-    }
-
-    renderDados();
-    buscarDadosWEG();
-    setInterval(buscarDadosWEG, 300000); // Executa a verificação automática a cada 5 minutos
+// Executa a busca assim que o aplicativo abre
+window.onload = buscarDadosSolar;
 </script>
+
 </body>
 </html>
